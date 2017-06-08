@@ -1,0 +1,109 @@
+---
+title: "Practical Machine Learning Assignment"
+author: "Sapna"
+date: "Thursday, June 08, 2017"
+output: html_document
+---
+==================================================================
+  
+## Title : Weight lifting exercise dataset : predicting the class
+  
+## Synopsis :
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, we will use the WLE data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. The goal is to predict the manner in which they did the exercise.
+  
+The how well part consists of 5 classes, exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). 
+  
+**The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.**
+
+**Packages used**
+```{r, results='hide'}
+library(caret)
+library(dplyr)
+library(rpart)
+library(randomForest)
+```
+
+  
+### Import data
+Let us first import the training and test data from the source files assuming that the files have been placed in the working directory.
+```{r, cache=TRUE}
+training <- read.csv('pml-training.csv', na.strings=c("","NA","#DIV/0!"))
+testing <- read.csv('pml-testing.csv', na.strings=c("","NA","#DIV/0!"))
+```
+
+### Exploratory Analysis and Preprocessing
+Lets explore our training data before we start modeling the required outcome.
+```{r}
+dim(training)
+str(training, list.len=20)
+```
+The training dataset consists of 19622 observations and 160 fields for each observation. Looking at the various columns we can be sure that certain columns are of no use in building our model. These are 'X', 'user_name', 'raw_timestamp_part_1', 'raw_timestamp_part_2', 'cvtd_timestamp', 'new_window' and 'num_window'. Also we will get rid of all columns having atleast one NA. The columns retained in training dataset are also retained in test set.
+
+```{r}
+##Remove columns of name and date
+training1 <- training[, -(1:7)]
+
+##Remove columns having atleast one NA value
+training2 <- training1[, colSums(is.na(training1))==0]
+
+dim(training2)
+```
+  
+  
+  
+Exploring further let us find and remove all columns having a near zero variance assuming these do not significantly influence the outcome. Then create a new dataset without these nzv columns.
+```{r}
+nzv <- nearZeroVar(training2, saveMetrics=TRUE)
+nzvcols <- rownames(nzv[nzv$nzv==TRUE,])
+nzvcols
+```
+  
+  
+As can be seen removing all columns having NA has also removed the near zero variance cols.
+
+
+
+
+We now partition the training2 dataset into train and test set so that we can cross validate our model for accuracy.
+```{r}
+set.seed(123)
+inTrain <- createDataPartition(training2$classe, p=0.7, list=FALSE)
+traindf <- training2[inTrain,]
+testdf <- training2[-inTrain,]
+
+dim(traindf)
+dim(testdf)
+```
+
+
+### Modeling
+Lets build different models on traindf and evaluate using testdf.
+  
+Fitting an rpart model.
+```{r}
+set.seed(123)
+fitrpart<- train(classe~., data=traindf, method='rpart')
+predrpart <- predict(fitrpart, testdf)
+confusionMatrix(predrpart, testdf$classe)
+```
+As we can see we get just a 55% accuracy which is very poor. Let us try some other models.
+
+Let us see if a randomForest model is any better
+```{r}
+set.seed(123)
+fitrf<- randomForest(classe~., data=traindf)
+predrf<- predict(fitrf, testdf)
+confusionMatrix(predrf, testdf$classe)
+```
+  
+**Clearly the randomForest model fits the train data best with a 99% accuracy allowing us to use this to predict the outcome for testing dataset.**
+
+We would now use our model fitrf to predict the classe (response) for the 20 observations in testing dataset.
+```{r}
+predict(fitrf, testing)
+```
+
+### Conclusions :
+Using the training dataset provided and after getting rid of insignificant columns by a method of exploration, we fit two models 'rpart' and 'randomForest' on 70% of the clean data and used the remaining 30% to validate the model predictions. With an accuracy of 99% randomForest model was clearly the winner as supposed to just a 55% accuracy of the rpart model. Finally we used the randomForest model to predict the outcome for the testing data.
+
+
